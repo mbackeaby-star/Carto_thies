@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="fr">
+
+<link rel="manifest" href="manifest.json">
+
+<meta name="theme-color" content="#2c7be5">
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="./resources/ol.css">
+    <link rel="stylesheet" href="resources/fontawesome-all.min.css">
+    <link href="resources/photon-geocoder-autocomplete.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
+    <link rel="stylesheet" href="./resources/qgis2web.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <title>Carte Interactive — Région de Thiès</title>
+    <style>
+        :root {
+            --vert: #2d6a4f;
+            --vert2: #52b788;
+            --sable: #f5f5f0;
+            --texte: #1a1a2e;
+            --gris: #6b7280;
+            --blanc: #fff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Inter", sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--sable);
+        }
+
+        /* HEADER */
+        header {
+            background: var(--vert);
+            color: white;
+            height: 52px;
+            padding: 0 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 2000;
+            box-shadow: 0 2px 8px rgba(0,0,0,.25);
+        }
+        .h-left { display: flex; align-items: center; gap: 10px; }
+        .h-icon {
+            background: var(--vert2);
+            border-radius: 8px;
+            width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 17px; flex-shrink: 0;
+        }
+        header h1 { font-size: 14px; font-weight: 600; line-height: 1.2; }
+        header p  { font-size: 11px; opacity: .65; }
+        .h-right { display: flex; gap: 7px; }
+        .hbtn {
+            background: rgba(255,255,255,.15);
+            border: 1px solid rgba(255,255,255,.3);
+            color: white; padding: 5px 13px;
+            border-radius: 7px; font-size: 12px;
+            cursor: pointer; font-family: inherit;
+        }
+        .hbtn:hover { background: rgba(255,255,255,.28); }
+
+        /* LAYOUT */
+        .body { display: flex; flex: 1; overflow: hidden; }
+
+        /* SIDEBAR */
+        #sb {
+            width: 255px;
+            background: var(--blanc);
+            border-right: 1px solid #e5e7eb;
+            display: flex; flex-direction: column;
+            overflow-y: auto; flex-shrink: 0;
+            z-index: 100;
+        }
+        .sec { padding: 13px 15px; border-bottom: 1px solid #f0f0f0; }
+        .sec-title {
+            font-size: 10px; font-weight: 700;
+            color: var(--gris); text-transform: uppercase;
+            letter-spacing: .9px; margin-bottom: 9px;
+        }
+
+        /* Recherche */
+        .srch { position: relative; }
+        .srch input {
+            width: 100%;
+            padding: 7px 10px 7px 30px;
+            border: 1px solid #e5e7eb;
+            border-radius: 7px; font-size: 13px;
+            font-family: inherit; background: var(--sable);
+            outline: none;
+        }
+        .srch input:focus { border-color: var(--vert2); }
+        .srch-ic {
+            position: absolute; left: 9px; top: 50%;
+            transform: translateY(-50%); font-size: 13px; color: var(--gris);
+        }
+
+        /* Basemap */
+        .bm-btns { display: flex; gap: 6px; }
+        .bm-btn {
+            flex: 1; padding: 6px 4px;
+            border: 2px solid #e5e7eb;
+            border-radius: 7px; font-size: 11px;
+            font-family: inherit; cursor: pointer;
+            background: var(--sable); color: var(--texte);
+            text-align: center; transition: all .15s;
+        }
+        .bm-btn.active { border-color: var(--vert); background: #e8f5e9; color: var(--vert); font-weight: 600; }
+
+        /* Couches */
+        .ly {
+            display: flex; align-items: center; gap: 9px;
+            padding: 6px 7px; border-radius: 7px;
+            cursor: pointer; margin-bottom: 2px;
+            transition: background .12s;
+            user-select: none;
+        }
+        .ly:hover { background: var(--sable); }
+        /* checkbox custom - PAS de vrai input */
+        .ck {
+            width: 16px; height: 16px; flex-shrink: 0;
+            border: 2px solid #bbb; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; color: white; transition: all .15s;
+        }
+        .ly.on .ck { background: var(--vert); border-color: var(--vert); }
+        .ly.on .ck::after { content: "✓"; }
+
+        /* Symboles légende */
+        .sym-poly {
+            width: 18px; height: 13px; border-radius: 2px; flex-shrink: 0;
+        }
+        .sym-line {
+            width: 20px; height: 3px; border-radius: 2px; flex-shrink: 0;
+        }
+        .sym-dot {
+            width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+        }
+        .ly-name { font-size: 13px; font-weight: 500; }
+
+        /* Outils */
+        .tbtn {
+            width: 100%; padding: 8px 10px;
+            border: 1px solid #e5e7eb; border-radius: 7px;
+            background: var(--blanc); color: var(--texte);
+            font-size: 12px; font-family: inherit;
+            cursor: pointer; display: flex; align-items: center;
+            gap: 8px; margin-bottom: 6px; transition: all .2s;
+        }
+        .tbtn:hover { background: var(--sable); border-color: var(--vert2); }
+        .tbtn.active { background: var(--vert); color: white; border-color: var(--vert); }
+        #mes-res {
+            background: #e8f5e9; border: 1px solid var(--vert2);
+            border-radius: 7px; padding: 7px 10px;
+            font-size: 13px; color: var(--vert);
+            font-weight: 600; display: none; text-align: center;
+            margin-top: 4px;
+        }
+
+        /* Info */
+        #info-box { font-size: 12px; color: var(--gris); line-height: 1.7; }
+        #info-box b { color: var(--vert); font-size: 13px; display: block; margin-bottom: 5px; }
+        #info-box table { width: 100%; border-collapse: collapse; }
+        #info-box td { padding: 2px 0; font-size: 11px; border-bottom: 1px solid #f5f5f5; }
+        #info-box td:first-child { color: var(--gris); width: 42%; }
+
+        /* CARTE */
+        #map-wrap { flex: 1; position: relative; overflow: hidden; }
+        #map { width: 100%; height: 100%; }
+
+        /* Masquer TOUTE la legende qgis2web - multiple selecteurs */
+        .layer-switcher,
+        .ol-layerswitcher,
+        .layer-switcher-fold,
+        button.layer-switcher-fold,
+        div.layer-switcher { display: none !important; }
+
+        /* Popup */
+        .ol-popup {
+            position: absolute;
+            background: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,.15);
+            padding: 12px 14px; border-radius: 10px;
+            bottom: 14px; left: -100px; min-width: 200px;
+            border-top: 3px solid var(--vert);
+            font-family: inherit; font-size: 12px;
+            pointer-events: auto;
+        }
+        .ol-popup::after {
+            content: ""; position: absolute;
+            bottom: -8px; left: 48px;
+            border-width: 8px 8px 0;
+            border-style: solid;
+            border-color: white transparent transparent;
+        }
+        .ol-popup-closer {
+            position: absolute; top: 6px; right: 10px;
+            text-decoration: none; color: var(--gris);
+            font-size: 16px; line-height: 1;
+        }
+        .ol-popup-closer::after { content: "×"; }
+        #popup-content b { color: var(--vert); font-size: 13px; display: block; margin-bottom: 5px; }
+        #popup-content table { width: 100%; border-collapse: collapse; }
+        #popup-content td { padding: 2px 3px; font-size: 11px; border-bottom: 1px solid #f0f0f0; }
+        #popup-content td:first-child { color: var(--gris); width: 45%; }
+
+        /* Géolocalisation */
+        #btn-geo {
+            position: absolute; bottom: 30px; right: 10px; z-index: 500;
+            background: white; border: none; border-radius: 8px;
+            width: 36px; height: 36px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.2);
+            cursor: pointer; font-size: 17px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #btn-geo:hover { background: #f0f0f0; }
+
+        /* Barre coords */
+        #coords {
+            position: absolute; bottom: 0; left: 0; right: 0; z-index: 400;
+            background: rgba(255,255,255,.88);
+            padding: 3px 12px; font-size: 11px; color: var(--gris);
+            display: flex; justify-content: space-between;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* OL overrides */
+        .ol-control > * {
+            background-color: white !important;
+            color: #333 !important;
+            border-radius: 6px !important;
+            font-family: inherit !important;
+        }
+        .ol-control { background: transparent !important; padding: 2px !important; }
+        .ol-zoom { top: 10px; left: 10px; }
+        .ol-attribution { bottom: 26px !important; right: 52px !important; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="h-left">
+        <div class="h-icon">🗺</div>
+        <div>
+            <h1>Carte Interactive — Région de Thiès</h1>
+            <p>SIG Web · Université Amadou Mahtar Mbow · 2025-2026</p>
+        </div>
+    </div>
+    <div class="h-right">
+        <button class="hbtn" onclick="exportCarte()">⬇ Exporter</button>
+        <button class="hbtn" onclick="toggleFS()">⛶ Plein écran</button>
+    </div>
+</header>
+
+<div class="body">
+    <aside id="sb">
+
+        <!-- Recherche -->
+        <div class="sec">
+            <div class="sec-title">🔍 Recherche</div>
+            <div class="srch">
+                <span class="srch-ic">🔍</span>
+                <input id="srch-in" type="text" placeholder="Chercher un lieu...">
+            </div>
+        </div>
+
+        <!-- Fond de carte -->
+        <div class="sec">
+            <div class="sec-title">🌍 Fond de carte</div>
+            <div class="bm-btns">
+                <button class="bm-btn" id="bm-osm" onclick="setBasemap('osm')">🗺 OSM</button>
+                <button class="bm-btn active" id="bm-sat" onclick="setBasemap('satellite')">🛰 Satellite</button>
+            </div>
+        </div>
+
+        <!-- Couches -->
+        <div class="sec">
+            <div class="sec-title">🗂 Couches</div>
+
+            <div class="ly on" id="ly0" onclick="togLy(this,0)">
+                <div class="ck"></div>
+                <div class="sym-poly" style="background:transparent;border:2px solid #444;"></div>
+                <span class="ly-name">Thiès (région)</span>
+            </div>
+            <div class="ly on" id="ly1" onclick="togLy(this,1)">
+                <div class="ck"></div>
+                <div class="sym-poly" style="background:transparent;border:2px solid #7c3aed;"></div>
+                <span class="ly-name">Départements</span>
+            </div>
+            <div class="ly on" id="ly2" onclick="togLy(this,2)">
+                <div class="ck"></div>
+                <div class="sym-dot" style="background:#b5651d;"></div>
+                <span class="ly-name">Localités</span>
+            </div>
+            <div class="ly on" id="ly3" onclick="togLy(this,3)">
+                <div class="ck"></div>
+                <div class="sym-poly" style="background:transparent;border:2px solid #9ca3af;"></div>
+                <span class="ly-name">Arrondissements</span>
+            </div>
+            <div class="ly on" id="ly4" onclick="togLy(this,4)">
+                <div class="ck"></div>
+                <div class="sym-dot" style="background:#9b59b6;"></div>
+                <span class="ly-name">Écoles</span>
+            </div>
+            <div class="ly on" id="ly5" onclick="togLy(this,5)">
+                <div class="ck"></div>
+                <div class="sym-line" style="background:#7f8c8d;"></div>
+                <span class="ly-name">Routes</span>
+            </div>
+        </div>
+
+        <!-- Outils -->
+        <div class="sec">
+            <div class="sec-title">🛠 Outils</div>
+            <button class="tbtn" id="btn-mes" onclick="togMes()">📏 Mesurer une distance</button>
+            <button class="tbtn" onclick="reinit()">🏠 Vue initiale</button>
+            <div id="mes-res"></div>
+        </div>
+
+        <!-- Information -->
+        <div class="sec">
+            <div class="sec-title">ℹ Information</div>
+            <div id="info-box">Cliquez sur un élément de la carte.</div>
+        </div>
+
+    </aside>
+
+    <div id="map-wrap">
+        <div id="map">
+            <div id="popup" class="ol-popup">
+                <a href="#" id="pop-cls" class="ol-popup-closer"></a>
+                <div id="popup-content"></div>
+            </div>
+        </div>
+        <button id="btn-geo" title="Ma position" onclick="geoMe()">📍</button>
+        <div id="coords">
+            <span id="coord-txt">Déplacez la souris sur la carte…</span>
+            <span>EPSG:4326 · WGS84</span>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts qgis2web -->
+<script src="resources/qgis2web_expressions.js"></script>
+<script src="./resources/functions.js"></script>
+<script src="./resources/ol.js"></script>
+<script src="./resources/ol-layerswitcher.js"></script>
+<script src="resources/photon-geocoder-autocomplete.min.js"></script>
+<script src="layers/This_1.js"></script>
+<script src="layers/Dept_this_2.js"></script>
+<script src="layers/Localits_this_3.js"></script>
+<script src="layers/Arr_this_4.js"></script>
+<script src="layers/Ecole_this_5.js"></script>
+<script src="layers/Routes_this_6.js"></script>
+<script src="styles/This_1_style.js"></script>
+<script src="styles/Dept_this_2_style.js"></script>
+<script src="styles/Localits_this_3_style.js"></script>
+<script src="styles/Arr_this_4_style.js"></script>
+<script src="styles/Ecole_this_5_style.js"></script>
+<script src="styles/Routes_this_6_style.js"></script>
+<script src="./layers/layers.js"></script>
+<script src="./resources/Autolinker.min.js"></script>
+<script src="./resources/qgis2web.js"></script>
+
+<script>
+// ── Attendre que qgis2web initialise map ──
+var mesOn = false, mesPts = [], olOv;
+
+function wait(cb, n) {
+    n = n || 0;
+    if (typeof map !== "undefined" && map && map.getLayers) { cb(); }
+    else if (n < 60) { setTimeout(function(){ wait(cb, n+1); }, 250); }
+}
+
+wait(function() {
+
+    // 1. Masquer legende qgis2web - forcer après rendu
+    function hideLegend() {
+        document.querySelectorAll(".layer-switcher, .ol-layerswitcher").forEach(function(el){
+            el.style.cssText = "display:none!important;visibility:hidden!important;pointer-events:none!important;";
+        });
+    }
+    hideLegend();
+    setTimeout(hideLegend, 500);
+    setTimeout(hideLegend, 1500);
+
+    // 2. Popup overlay
+    olOv = new ol.Overlay({
+        element: document.getElementById("popup"),
+        autoPan: { animation: { duration: 200 } }
+    });
+    map.addOverlay(olOv);
+    document.getElementById("pop-cls").onclick = function(){
+        olOv.setPosition(undefined); return false;
+    };
+
+    // 3. Coordonnées + curseur pointer
+    map.on("pointermove", function(evt) {
+        var c = ol.proj.transform(evt.coordinate, "EPSG:3857", "EPSG:4326");
+        document.getElementById("coord-txt").textContent =
+            "Lon : " + c[0].toFixed(5) + "  |  Lat : " + c[1].toFixed(5);
+        map.getViewport().style.cursor =
+            map.hasFeatureAtPixel(map.getEventPixel(evt.originalEvent)) ? "pointer" : "";
+    });
+
+    // 4. Clic carte → popup + info
+    map.on("singleclick", function(evt) {
+        if (mesOn) { doMes(evt); return; }
+        var html = "";
+        map.forEachFeatureAtPixel(evt.pixel, function(f) {
+            var p = f.getProperties();
+            var n = p.NOM||p.nom||p.NAME||p.name||p.NOMLOC||p.libelle||"Entité";
+            html += "<b>"+n+"</b><table>";
+            Object.keys(p).forEach(function(k){
+                if (k!=="geometry" && p[k]!==null && p[k]!=="" && p[k]!==undefined)
+                    html += "<tr><td>"+k+"</td><td><b>"+p[k]+"</b></td></tr>";
+            });
+            html += "</table>";
+            return true;
+        });
+        if (html) {
+            document.getElementById("popup-content").innerHTML = html;
+            document.getElementById("info-box").innerHTML = html;
+            olOv.setPosition(evt.coordinate);
+        } else {
+            olOv.setPosition(undefined);
+        }
+    });
+});
+
+// ── Toggle couche ──
+// qgis2web met les couches dans cet ordre dans map.getLayers() :
+// 0=basemap, 1=This_1, 2=Dept, 3=Localits, 4=Arr, 5=Ecole, 6=Routes
+// Notre sidebar : ly0=This(1), ly1=Dept(2), ly2=Loc(3), ly3=Arr(4), ly4=Ecole(5), ly5=Routes(6)
+function togLy(el, idx) {
+    wait(function(){
+        var layers = map.getLayers().getArray();
+        // +1 pour sauter le fond de carte en position 0
+        var target = layers[idx + 1];
+        if (target) target.setVisible(!target.getVisible());
+        el.classList.toggle("on");
+    });
+}
+
+// ── Basemap ──
+var bmLayer = null;
+function setBasemap(type) {
+    wait(function(){
+        document.getElementById("bm-osm").classList.remove("active");
+        document.getElementById("bm-sat").classList.remove("active");
+        document.getElementById("bm-"+type).classList.add("active");
+        var layers = map.getLayers().getArray();
+        var base = layers[0]; // premier layer = fond
+        if (!base) return;
+        if (type === "osm") {
+            base.setSource(new ol.source.OSM());
+        } else {
+            base.setSource(new ol.source.XYZ({
+                url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+                attributions: "© Google Satellite"
+            }));
+        }
+    });
+}
+
+// ── Mesure ──
+function togMes() {
+    mesOn = !mesOn;
+    mesPts = [];
+    var btn = document.getElementById("btn-mes");
+    var res = document.getElementById("mes-res");
+    if (mesOn) {
+        btn.classList.add("active");
+        btn.textContent = "✕ Annuler la mesure";
+        res.style.display = "block";
+        res.textContent = "📍 Cliquez sur le point de départ…";
+    } else {
+        btn.classList.remove("active");
+        btn.textContent = "📏 Mesurer une distance";
+        res.style.display = "none";
+    }
+}
+
+function doMes(evt) {
+    var c = ol.proj.transform(evt.coordinate, "EPSG:3857", "EPSG:4326");
+    mesPts.push(c);
+    var res = document.getElementById("mes-res");
+    if (mesPts.length === 1) {
+        res.textContent = "📍 Cliquez sur le point d'arrivée…";
+    } else {
+        var d = haversine(mesPts[0], mesPts[1]);
+        res.textContent = d < 1
+            ? "📏 Distance : " + (d*1000).toFixed(0) + " m"
+            : "📏 Distance : " + d.toFixed(2) + " km";
+        mesOn = false; mesPts = [];
+        document.getElementById("btn-mes").classList.remove("active");
+        document.getElementById("btn-mes").textContent = "📏 Mesurer une distance";
+    }
+}
+
+function haversine(a, b) {
+    var R=6371, r=Math.PI/180;
+    var dLat=(b[1]-a[1])*r, dLon=(b[0]-a[0])*r;
+    var x=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a[1]*r)*Math.cos(b[1]*r)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// ── Géolocalisation ──
+function geoMe() {
+    if (!navigator.geolocation) { alert("Non supporté."); return; }
+    navigator.geolocation.getCurrentPosition(function(pos){
+        wait(function(){
+            var c = ol.proj.transform([pos.coords.longitude,pos.coords.latitude],"EPSG:4326","EPSG:3857");
+            map.getView().animate({center:c,zoom:13,duration:800});
+        });
+    }, function(){ alert("Position introuvable."); });
+}
+
+// ── Vue initiale ──
+function reinit() {
+    wait(function(){ map.getView().animate({zoom:9,duration:600}); });
+}
+
+// ── Plein écran ──
+function toggleFS() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+}
+
+// ── Export ──
+function exportCarte() {
+    wait(function(){
+        map.once("rendercomplete", function(){
+            var c = document.querySelector("#map canvas");
+            if (!c) { alert("Export impossible."); return; }
+            var a = document.createElement("a");
+            a.download = "carte-thies.png";
+            a.href = c.toDataURL("image/png");
+            a.click();
+        });
+        map.renderSync();
+    });
+}
+
+// ── Recherche ──
+document.getElementById("srch-in").addEventListener("keypress", function(e){
+    if (e.key !== "Enter" || !this.value.trim()) return;
+    fetch("https://nominatim.openstreetmap.org/search?q=" +
+          encodeURIComponent(this.value+", Thiès, Sénégal") +
+          "&format=json&limit=1")
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (!d.length) { alert("Lieu non trouvé."); return; }
+            wait(function(){
+                var c = ol.proj.transform([parseFloat(d[0].lon),parseFloat(d[0].lat)],"EPSG:4326","EPSG:3857");
+                map.getView().animate({center:c,zoom:13,duration:800});
+            });
+        });
+});
+</script>
+<script>
+
+if ("serviceWorker" in navigator) {
+
+navigator.serviceWorker.register("service-worker.js")
+.then(function(){
+console.log("Application mobile activée");
+});
+
+}
+
+</script>
+</body>
+</html>
